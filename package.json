@@ -1,0 +1,16 @@
+{
+  "name": "domain_guards",
+  "version": "1.0.0",
+  "description": "Domain Guards is a github action that will read various yaml files throughout the repo and perform various actions, on Pull Requests based on the diff of the PR. The various actions include:\r * Requesting reviews from Repo Collaborators and Teams\r * Adding collaborators as Assignees\r * Add an automated comment to a file in the Pull Request",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1"
+  }
+}
