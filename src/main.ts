@@ -3,6 +3,7 @@ import * as github from '@actions/github'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
+import { DiffAnalysis } from './diff-analysis'
 
 /**
  * The main function for the action.
@@ -19,6 +20,24 @@ export async function run(): Promise<void> {
       repo: github.context.repo.repo,
       pull_number: pr_number,
     })
+    const { data: raw_diff } = await octokit.rest.repos.compareCommits({
+      owner: github.context.repo.owner,
+      repo: github.context.repo.repo,
+      base: pr.base.sha,
+      head: pr.head.sha,
+      mediaType: {
+        format: 'diff'
+      }
+    })
+    
+    // The raw_diff when using mediaType.format: 'diff' returns the diff as a string
+    // Cast it to string since the API returns raw text
+    const diffText = typeof raw_diff === 'string' ? raw_diff : JSON.stringify(raw_diff)
+    
+    // Parse the diff into a DiffAnalysis object
+    const diffAnalysis = new DiffAnalysis(diffText)
+    core.info('Diff Analysis:')
+    core.info(JSON.stringify(diffAnalysis.getSummary(), null, 2))
     
     // Parse all .dg files from the repo
     const configs = await getDomainGuardConfigs(github.context.payload.repository?.clone_url ? '.' : process.cwd())

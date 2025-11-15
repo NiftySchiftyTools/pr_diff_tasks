@@ -34,7 +34,7 @@ STRUCT_NAME_CAN_BE_ANYTHING:
     comments: []
     # List of Collaborators to request reviews from when struct is triggered
     reviewers: []
-    # List of Collaborators to assign PR to when struct is triggered (limit 10) 
+    # List of Collaborators to assign PR to when struct is triggered (limit 10 total) 
     assignees: []
     # List of Github Teams to request reviews from
     teams: []
@@ -67,3 +67,5 @@ bottom_level_struct:
 and The PR diff was in file at `subdirectory/file1.txt`, then only the `bottom_level_struct` will be triggered since it is in a deeper directory of the repo. But the `top_level_struct` would still be triggered if there was a change to a file at `subdirectory/file2.txt` since it wouldn't match the `bottom_level_struct`.
 
 Action values that are not valid such as a invalid team name, label, github user that is not a collaborator on the repo, etc. Will result in a warning log but will not stop the action. 
+
+Another unique behaviour will come up as a result of a technical limitation in Github. Only 10 people can be assigned to a PR. So this will always behave similiar to the `last_match` quirk value, in that it will only ever assign up to the last 10 people marked for assignment. 
