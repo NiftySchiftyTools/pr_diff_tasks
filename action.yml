@@ -1,6 +1,6 @@
 name: Domain Guards
 description: A GitHub Action to protect your repository by trigger actions based on domain structures throughout the repo
-author: 'Dallin Schiffman'
+author: "Dallin Schiffman"
 
 permissions:
   contents: read
@@ -9,13 +9,13 @@ permissions:
 
 inputs:
   github_token:
-    description: 'GitHub token to authenticate API requests for actions.'
+    description: "GitHub token to authenticate API requests for actions."
     required: true
   pr_number:
-    description: 'The pull request number to analyze.'
+    description: "The pull request number to analyze."
     required: true
-    default: '${{ github.event.pull_request.number }}'
-  
+    default: "${{ github.event.pull_request.number }}"
+
 runs:
   using: node20
   main: dist/index.js
