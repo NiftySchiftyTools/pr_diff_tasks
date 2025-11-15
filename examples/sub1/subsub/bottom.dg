@@ -1,0 +1,7 @@
+bottom_struct:
+  paths: ['deep.txt']
+  filters:
+    quirk: last_match
+  actions:
+    comments: ["Hello from the bottom-level subsub"]
+    labels: ["deep-change"]

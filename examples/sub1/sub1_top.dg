@@ -1,0 +1,7 @@
+sub1_struct:
+  paths: ['*.txt']
+  filters:
+    quirk: last_match
+  actions:
+    comments: ["Hello from sub1"]
+    assignees: ["sub1-owner"]

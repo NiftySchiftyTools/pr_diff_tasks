@@ -1,0 +1,10 @@
+---
+first_struct:
+  paths: ['doc1.txt']
+  actions:
+    comments: ["First document comment"]
+---
+second_struct:
+  paths: ['doc1.txt']
+  actions:
+    comments: ["Second document comment"]

@@ -1,0 +1,8 @@
+top_level_struct:
+  paths: ['sub1/*.txt', 'sub2/*.txt']
+  filters:
+    quirk: last_match
+    contains: '.*'
+  actions:
+    comments: ["Hello from the top level"]
+    reviewers: ["top-reviewer"]

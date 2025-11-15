@@ -1,0 +1,7 @@
+other_struct:
+  paths: ['notes.txt']
+  filters:
+    quirk: all
+  actions:
+    comments: ["Other struct triggered"]
+    labels: ["example", "other"]
