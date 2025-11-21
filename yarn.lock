@@ -197,6 +197,11 @@
   dependencies:
     undici-types "~6.21.0"
 
+"@vercel/ncc@^0.38.1":
+  version "0.38.4"
+  resolved "https://registry.npmjs.org/@vercel/ncc/-/ncc-0.38.4.tgz"
+  integrity sha512-8LwjnlP39s08C08J5NstzriPvW1SP8Zfpp1BvC2sI35kPeZnHfxVkCwu4/+Wodgnd60UtT1n8K8zw+Mp7J9JmQ==
+
 acorn-walk@^8.1.1:
   version "8.3.4"
   resolved "https://registry.npmjs.org/acorn-walk/-/acorn-walk-8.3.4.tgz"
@@ -277,17 +282,12 @@ ts-node@^10.9.1:
     v8-compile-cache-lib "^3.0.1"
     yn "3.1.1"
 
-tsc@^2.0.4:
-  version "2.0.4"
-  resolved "https://registry.npmjs.org/tsc/-/tsc-2.0.4.tgz"
-  integrity sha512-fzoSieZI5KKJVBYGvwbVZs/J5za84f2lSTLPYf6AGiIf43tZ3GNrI1QzTLcjtyDDP4aLxd46RTZq1nQxe7+k5Q==
-
 tunnel@^0.0.6:
   version "0.0.6"
   resolved "https://registry.npmjs.org/tunnel/-/tunnel-0.0.6.tgz"
   integrity sha512-1h/Lnq9yajKY2PEbBadPXj3VxsDDu844OnaAo52UVmIzIvwwtBPIuNvkjuzBlTWpfJyUbG3ez0KSBibQkj4ojg==
 
-typescript@^5.0.0, typescript@>=2.7:
+typescript@^5.9.3, typescript@>=2.7:
   version "5.9.3"
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz"
   integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==

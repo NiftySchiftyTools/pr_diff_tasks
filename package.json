@@ -7,18 +7,18 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && ncc build dist/src/index.js -o dist --source-map --license licenses.txt"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/github": "^6.0.1",
-    "js-yaml": "^4.1.0",
-    "tsc": "^2.0.4"
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^20.0.0",
+    "@vercel/ncc": "^0.38.1",
     "ts-node": "^10.9.1",
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.3"
   }
 }
