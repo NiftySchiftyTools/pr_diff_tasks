@@ -1,0 +1,13 @@
+first_struct:
+  paths: ["*.ts"]
+  actions:
+    comments: ["First document comment"]
+second_struct:
+  paths: ["*.ts"]
+  actions:
+    labels: ["bugfix"]
+
+third_struct:
+  paths: ["src/**/*.ts"]
+  actions:
+    assignees: ["dtschiffman"]

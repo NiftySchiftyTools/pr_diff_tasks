@@ -41,4 +41,17 @@ export class FileMatches {
   getLastMatchNames(): string[] {
     return this.lastMatchMatches.map((m) => m.name);
   }
+
+  // check if there are any matches
+  hasMatches(): boolean {
+    return this.directMatches.length > 0 || this.lastMatchMatches.length > 0;
+  }
+
+  toJSON() {
+    return {
+      filePath: this.filePath,
+      directMatches: this.directMatches.map((m) => m.toJSON()),
+      lastMatchMatches: this.lastMatchMatches.map((m) => m.toJSON()),
+    };
+  }
 }

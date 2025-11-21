@@ -17,5 +17,19 @@ inputs:
     default: "${{ github.event.pull_request.number }}"
 
 runs:
-  using: node20
-  main: dist/index.js
+  using: composite
+  steps:
+    - name: Checkout .dg files only
+      uses: actions/checkout@v4
+      with:
+        token: ${{ inputs.github_token }}
+        sparse-checkout: |
+          **/*.dg
+        sparse-checkout-cone-mode: false
+
+    - name: Run Domain Guards
+      shell: bash
+      env:
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+      run: node ${{ github.action_path }}/dist/index.js

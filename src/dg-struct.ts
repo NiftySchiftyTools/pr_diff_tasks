@@ -1,5 +1,7 @@
 import * as path from "path";
 import * as core from "@actions/core";
+import { minimatch } from "minimatch";
+import { FileDiff } from "./diff-analysis";
 
 export type Quirk = "all" | "last_match";
 export type DiffType = "all" | "additions" | "removals" | "raw";
@@ -79,17 +81,6 @@ export class DGStruct {
     return results;
   }
 
-  // Helper: convert relative patterns to a regex (very small subset: supports * wildcard)
-  private patternToRegex(pat: string): RegExp {
-    // make path posix-style for matching
-    const rel = pat.replace(/\\/g, "/");
-    // escape regex special chars, then replace '*' with '.*'
-    const esc = rel
-      .replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&")
-      .replace(/\\\*/g, ".*");
-    return new RegExp("^" + esc + "$");
-  }
-
   private normalizeRelative(target: string): string {
     // produce a path relative to the DG file dir and in posix style
     const rel = path.relative(this.dir, target);
@@ -101,19 +92,17 @@ export class DGStruct {
    * `fileFullPath` should be an absolute or repo-root relative path.
    */
   matchesFile(fileFullPath: string): boolean {
-    if (!this.paths || this.paths.length === 0) return false;
+    if (!this.paths || this.paths.length === 0) return true; // no paths means match all
 
     const rel = this.normalizeRelative(fileFullPath);
 
     // check exclude_paths first
     for (const ex of this.filters.exclude_paths ?? []) {
-      const rex = this.patternToRegex(ex);
-      if (rex.test(rel)) return false;
+      if (minimatch(rel, ex)) return false;
     }
 
     for (const pat of this.paths) {
-      const r = this.patternToRegex(pat);
-      if (r.test(rel)) return true;
+      if (minimatch(rel, pat)) return true;
     }
 
     return false;
@@ -145,6 +134,43 @@ export class DGStruct {
         break;
       default:
         subject = diffText;
+    }
+
+    return regex.test(subject);
+  }
+
+  /**
+   * Check whether a FileDiff matches this struct's filters.
+   * This combines both file path matching and diff content matching.
+   *
+   * @param fileDiff - The FileDiff to check against this struct's filters
+   * @returns true if the FileDiff matches all filters (path + diff content)
+   */
+  matchesFileDiff(fileDiff: FileDiff): boolean {
+    // First check if the file path matches
+    if (!this.matchesFile(fileDiff.filePath)) {
+      return false;
+    }
+
+    // Then check if the diff content matches based on diff_type
+    const regex = new RegExp(this.filters.contains ?? ".*", "s");
+
+    let subject = "";
+    switch (this.filters.diff_type) {
+      case "additions":
+        subject = fileDiff.addedLines.join("\n");
+        break;
+      case "removals":
+        subject = fileDiff.deletedLines.join("\n");
+        break;
+      case "all":
+        subject = fileDiff.changedLines.join("\n");
+        break;
+      case "raw":
+        subject = fileDiff.rawDiff;
+        break;
+      default:
+        subject = fileDiff.changedLines.join("\n");
     }
 
     return regex.test(subject);

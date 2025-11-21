@@ -14,11 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Run Domain Guards Action
-        uses: dtschiffman/domain_guards@master
+        uses: dtschiffman/domain_guards@dschiffman-tests-the-workflow
         with:
           github_token: ${{ github.token }}
           pr_number: ${{ github.event.pull_request.number }}
