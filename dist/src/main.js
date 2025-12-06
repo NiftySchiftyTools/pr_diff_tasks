@@ -43,6 +43,7 @@ const yaml = __importStar(require("js-yaml"));
 const diff_analysis_1 = require("./diff-analysis");
 const dg_struct_1 = require("./dg-struct");
 const match_1 = require("./match");
+const helpers_1 = require("./helpers");
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -81,6 +82,7 @@ async function run() {
         core.info("Starting to collect matching structures...");
         const matches = collectMatchingStructures(configs, prDiff);
         core.info("Domain Guard Matches:");
+        (0, helpers_1.handleMatches)(matches, pr, octokit);
         core.info(JSON.stringify(Array.from(matches.entries()), null, 2));
     }
     catch (error) {

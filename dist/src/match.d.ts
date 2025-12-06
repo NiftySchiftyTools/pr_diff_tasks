@@ -10,6 +10,7 @@ export declare class FileMatches {
     getDirectMatchNames(): string[];
     getLastMatchNames(): string[];
     hasMatches(): boolean;
+    getMatches(): DGStruct[];
     toJSON(): {
         filePath: string;
         directMatches: {
@@ -27,5 +28,12 @@ export declare class FileMatches {
             dir: string;
         }[];
     };
+}
+export declare class StructMatches {
+    struct: DGStruct;
+    additionalFilePaths: Set<string>;
+    anchorFilePath: string;
+    constructor(struct: DGStruct, anchorfilePath: string);
+    addFilePath(filePath: string): void;
 }
 //# sourceMappingURL=match.d.ts.map

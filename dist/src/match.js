@@ -3,7 +3,8 @@
     Helper class to store matches dg structs to changes in a diff
 */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FileMatches = void 0;
+exports.StructMatches = exports.FileMatches = void 0;
+// Helper class for finding Matches
 class FileMatches {
     constructor(filePath) {
         this.filePath = filePath;
@@ -35,6 +36,9 @@ class FileMatches {
     hasMatches() {
         return this.directMatches.length > 0 || this.lastMatchMatches.length > 0;
     }
+    getMatches() {
+        return this.directMatches.concat(this.lastMatchMatches);
+    }
     toJSON() {
         return {
             filePath: this.filePath,
@@ -44,4 +48,16 @@ class FileMatches {
     }
 }
 exports.FileMatches = FileMatches;
+// Helper class for processing Matches
+class StructMatches {
+    constructor(struct, anchorfilePath) {
+        this.struct = struct;
+        this.additionalFilePaths = new Set();
+        this.anchorFilePath = anchorfilePath;
+    }
+    addFilePath(filePath) {
+        this.additionalFilePaths.add(filePath);
+    }
+}
+exports.StructMatches = StructMatches;
 //# sourceMappingURL=match.js.map

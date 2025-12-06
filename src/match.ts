@@ -4,6 +4,7 @@
 
 import { DGStruct } from "./dg-struct";
 
+// Helper class for finding Matches
 export class FileMatches {
   filePath: string;
   // stores direct matching DGStruct instances
@@ -47,11 +48,32 @@ export class FileMatches {
     return this.directMatches.length > 0 || this.lastMatchMatches.length > 0;
   }
 
+  getMatches(): DGStruct[] {
+    return this.directMatches.concat(this.lastMatchMatches);
+  }
+
   toJSON() {
     return {
       filePath: this.filePath,
       directMatches: this.directMatches.map((m) => m.toJSON()),
       lastMatchMatches: this.lastMatchMatches.map((m) => m.toJSON()),
     };
+  }
+}
+
+// Helper class for processing Matches
+export class StructMatches {
+  struct: DGStruct;
+  additionalFilePaths: Set<string>;
+  anchorFilePath: string;
+
+  constructor(struct: DGStruct, anchorfilePath: string) {
+    this.struct = struct;
+    this.additionalFilePaths = new Set();
+    this.anchorFilePath = anchorfilePath;
+  }
+
+  addFilePath(filePath: string) {
+    this.additionalFilePaths.add(filePath);
   }
 }

@@ -6,6 +6,8 @@ import * as yaml from "js-yaml";
 import { PRDiff } from "./diff-analysis";
 import { DGStruct } from "./dg-struct";
 import { FileMatches } from "./match";
+import { handleMatches } from "./helpers";
+import { PullRequest } from "@octokit/webhooks-types";
 
 /**
  * The main function for the action.
@@ -53,6 +55,7 @@ export async function run(): Promise<void> {
     core.info("Starting to collect matching structures...");
     const matches = collectMatchingStructures(configs, prDiff);
     core.info("Domain Guard Matches:");
+    handleMatches(matches, pr as PullRequest, octokit);
     core.info(JSON.stringify(Array.from(matches.entries()), null, 2));
 
   } catch (error) {
