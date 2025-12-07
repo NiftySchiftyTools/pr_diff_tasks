@@ -85,6 +85,23 @@ class DGStruct {
         }
         return results;
     }
+    /**
+     * Reconstruct a DGStruct from a JSON object (e.g., from toJSON())
+     */
+    static fromJSON(json) {
+        if (!json || typeof json !== "object") {
+            throw new Error("Invalid JSON for DGStruct");
+        }
+        // Create a new instance using the constructor
+        const obj = {
+            dir: json.dir,
+            name: json.name,
+            paths: json.paths,
+            filters: json.filters,
+            actions: json.actions
+        };
+        return new DGStruct(json.name, obj, json.dir);
+    }
     normalizeRelative(target) {
         // produce a path relative to the DG file dir and in posix style
         const rel = path.relative(this.dir, target);
@@ -182,19 +199,19 @@ class DGStruct {
     }
     toSummaryString() {
         let summary = `${this.dir}/${this.name}:\n`;
-        if (this.actions.assignees) {
+        if (this.actions.assignees && this.actions.assignees.length > 0) {
             summary += `  - Assignees: [${this.actions.assignees.join(", ")}]\n`;
         }
-        if (this.actions.reviewers) {
+        if (this.actions.reviewers && this.actions.reviewers.length > 0) {
             summary += `  - Reviewers: [${this.actions.reviewers.join(", ")}]\n`;
         }
-        if (this.actions.teams) {
+        if (this.actions.teams && this.actions.teams.length > 0) {
             summary += `  - Teams: [${this.actions.teams.join(", ")}]\n`;
         }
-        if (this.actions.labels) {
+        if (this.actions.labels && this.actions.labels.length > 0) {
             summary += `  - Labels: [${this.actions.labels.join(", ")}]\n`;
         }
-        if (this.actions.comments) {
+        if (this.actions.comments && this.actions.comments.length > 0) {
             summary += `  - Comments: [${this.actions.comments.length} comment(s)]\n`;
         }
         return summary;

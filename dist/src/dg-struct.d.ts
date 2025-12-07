@@ -27,6 +27,10 @@ export declare class DGStruct {
      * the .dg file so relative paths can be evaluated later.
      */
     static fromParsedYaml(parsed: any, fileDir: string): DGStruct[];
+    /**
+     * Reconstruct a DGStruct from a JSON object (e.g., from toJSON())
+     */
+    static fromJSON(json: any): DGStruct;
     private normalizeRelative;
     /**
      * Check whether this struct's path globs match the given file path.

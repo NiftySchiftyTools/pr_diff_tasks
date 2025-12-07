@@ -34383,6 +34383,23 @@ class DGStruct {
         }
         return results;
     }
+    /**
+     * Reconstruct a DGStruct from a JSON object (e.g., from toJSON())
+     */
+    static fromJSON(json) {
+        if (!json || typeof json !== "object") {
+            throw new Error("Invalid JSON for DGStruct");
+        }
+        // Create a new instance using the constructor
+        const obj = {
+            dir: json.dir,
+            name: json.name,
+            paths: json.paths,
+            filters: json.filters,
+            actions: json.actions
+        };
+        return new DGStruct(json.name, obj, json.dir);
+    }
     normalizeRelative(target) {
         // produce a path relative to the DG file dir and in posix style
         const rel = path.relative(this.dir, target);
@@ -34480,19 +34497,19 @@ class DGStruct {
     }
     toSummaryString() {
         let summary = `${this.dir}/${this.name}:\n`;
-        if (this.actions.assignees) {
+        if (this.actions.assignees && this.actions.assignees.length > 0) {
             summary += `  - Assignees: [${this.actions.assignees.join(", ")}]\n`;
         }
-        if (this.actions.reviewers) {
+        if (this.actions.reviewers && this.actions.reviewers.length > 0) {
             summary += `  - Reviewers: [${this.actions.reviewers.join(", ")}]\n`;
         }
-        if (this.actions.teams) {
+        if (this.actions.teams && this.actions.teams.length > 0) {
             summary += `  - Teams: [${this.actions.teams.join(", ")}]\n`;
         }
-        if (this.actions.labels) {
+        if (this.actions.labels && this.actions.labels.length > 0) {
             summary += `  - Labels: [${this.actions.labels.join(", ")}]\n`;
         }
-        if (this.actions.comments) {
+        if (this.actions.comments && this.actions.comments.length > 0) {
             summary += `  - Comments: [${this.actions.comments.length} comment(s)]\n`;
         }
         return summary;
@@ -34713,9 +34730,10 @@ exports.MatchProcessor = void 0;
 const match_1 = __nccwpck_require__(2251);
 const core = __importStar(__nccwpck_require__(6966));
 class MatchProcessor {
-    constructor(pr_response, octokit) {
+    constructor(pr_response, octokit, previous_matches = new Map()) {
         this.pull_request = pr_response;
         this.octokit = octokit;
+        this.previous_matches = previous_matches;
     }
     async handleMatches(matches) {
         const structs = new Map();
@@ -34735,6 +34753,10 @@ class MatchProcessor {
         const review_comments = [];
         let summary = "Triggered Domain Guard Structures:";
         for (const [_, structMatch] of structs) {
+            if (this.previous_matches.has(`${structMatch.struct.dir}/${structMatch.struct.name}`)) {
+                core.info(`Skipping struct ${structMatch.struct.dir}/${structMatch.struct.name} as it was matched in a previous run.`);
+                continue;
+            }
             for (const comment of structMatch.struct.actions.comments ?? []) {
                 const additionalFilesContext = structMatch.additionalFilePaths.size > 0 ? `\n\n_Also affects files:_\n${Array.from(structMatch.additionalFilePaths).map(f => `- ${f}`).join('\n')}` : '';
                 review_comments.push({
@@ -34764,7 +34786,7 @@ class MatchProcessor {
         if (labels.length > 0) {
             await this.addLabels(labels);
         }
-        // TODO: handle labels
+        return Array.from(structs.values()).map(s => s.struct).concat(Array.from(this.previous_matches.values()).map(s => s));
     }
     async postReview(summary, comments) {
         await this.octokit.rest.pulls.createReview({
@@ -34923,6 +34945,54 @@ async function run() {
         const github_token = core.getInput("github_token");
         const pr_number = parseInt(core.getInput("pr_number"));
         const octokit = github.getOctokit(github_token);
+        const pr_artifacts = await octokit.rest.actions.listArtifactsForRepo({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            name: `${pr_number}-domain-guards-matches`,
+        });
+        let prev_matches_path = null;
+        if (pr_artifacts.data.artifacts.length > 0) {
+            core.info(`Found artifact for previous matches: ${pr_artifacts.data.artifacts[0].name}`);
+            const artifact_data = await octokit.rest.actions.downloadArtifact({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                artifact_id: pr_artifacts.data.artifacts[0].id,
+                archive_format: "zip",
+            });
+            // Save the zip file
+            const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+            const zipPath = path.join(tmpDir, `${pr_number}-domain-guards-matches.zip`);
+            await fs.writeFile(zipPath, Buffer.from(artifact_data.data));
+            core.info(`Downloaded artifact to: ${zipPath}`);
+            // Extract the zip file
+            const extractPath = path.join(tmpDir, `${pr_number}-domain-guards-matches`);
+            await fs.mkdir(extractPath, { recursive: true });
+            // Use unzip command to extract
+            const { execSync } = __nccwpck_require__(7698);
+            execSync(`unzip -o "${zipPath}" -d "${extractPath}"`);
+            // Set the path to the extracted matches.json
+            prev_matches_path = path.join(extractPath, "matches.json");
+            core.info(`Extracted artifact to: ${prev_matches_path}`);
+        }
+        const prev_matched_structs = new Map();
+        if (prev_matches_path) {
+            core.info(`Loading previous matches from: ${prev_matches_path}`);
+            try {
+                const prevMatchesContent = await fs.readFile(prev_matches_path, "utf8");
+                const prevMatchesData = JSON.parse(prevMatchesContent);
+                for (const struct_item of prevMatchesData) {
+                    prev_matched_structs.set(`${struct_item.dir}/${struct_item.name}`, dg_struct_1.DGStruct.fromJSON(struct_item));
+                }
+                core.info(`Loaded ${prev_matched_structs.size} previous matches from ${prev_matches_path}`);
+            }
+            catch (err) {
+                core.warning(`Failed to read previous matches from ${prev_matches_path}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        core.info(`Loaded ${prev_matched_structs.size} previous matched structs.`);
+        for (const [_key, _struct] of prev_matched_structs) {
+            core.info(`Previously matched struct: ${_key}: ${_struct.toSummaryString()}`);
+        }
         const { data: pr } = await octokit.rest.pulls.get({
             owner: github.context.repo.owner,
             repo: github.context.repo.repo,
@@ -34953,8 +35023,21 @@ async function run() {
         core.info(`Found ${matches.size} files with matching structures.`);
         // Process matches: post comments, request reviewers, etc.
         core.info("Processing matches...");
-        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit);
-        matchProcessor.handleMatches(matches);
+        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit, prev_matched_structs);
+        const matches_to_cache = await matchProcessor.handleMatches(matches);
+        // Write matches to a temporary JSON file
+        const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+        const tmpFilePath = path.join(tmpDir, `matches.json`);
+        const matchesData = matches_to_cache.map((dg_struct) => ({
+            name: dg_struct.name,
+            dir: dg_struct.dir,
+            paths: dg_struct.paths,
+            filters: dg_struct.filters,
+            actions: dg_struct.actions,
+        }));
+        await fs.writeFile(tmpFilePath, JSON.stringify(matchesData, null, 2), "utf8");
+        core.info(`Matches written to: ${tmpFilePath}`);
+        core.setOutput("matches_path", tmpFilePath);
     }
     catch (error) {
         // Fail the workflow run if an error occurs

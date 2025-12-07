@@ -1,10 +1,8 @@
-import { PRDiff } from "./diff-analysis";
 import { DGStruct } from "./dg-struct";
 import { FileMatches, StructMatches } from "./match";
 import { PullRequest } from "@octokit/webhooks-types";
 import { getOctokit } from "@actions/github";
 import * as core from "@actions/core";
-import { isFloat64Array } from "util/types";
 
 interface ReviewCommentStruct {
     path: string;
@@ -20,14 +18,16 @@ export class MatchProcessor {
     pull_request: PullRequest;
     octokit: ReturnType<typeof getOctokit>;
     collaborators: string[];
+    previous_matches: Map<string, DGStruct>;
 
 
-    constructor(pr_response: PullRequest, octokit: ReturnType<typeof getOctokit>) {
+    constructor(pr_response: PullRequest, octokit: ReturnType<typeof getOctokit>, previous_matches: Map<string, DGStruct>=new Map()) {
         this.pull_request = pr_response;
         this.octokit = octokit;
+        this.previous_matches = previous_matches;
     }
 
-    public async handleMatches(matches: Map<string, FileMatches>): Promise<void> {
+    public async handleMatches(matches: Map<string, FileMatches>): Promise<DGStruct[]> {
         const structs: Map<string, StructMatches> = new Map();
         // Deduplicate Matches using StructMatches
         for ( const [filePath, FileMatches] of matches) {
@@ -44,6 +44,10 @@ export class MatchProcessor {
         const review_comments: ReviewCommentStruct[] = [];
         let summary = "Triggered Domain Guard Structures:";
         for ( const [_, structMatch] of structs) {
+            if (this.previous_matches.has(`${structMatch.struct.dir}/${structMatch.struct.name}`)) {
+                core.info(`Skipping struct ${structMatch.struct.dir}/${structMatch.struct.name} as it was matched in a previous run.`);
+                continue;
+            }
             for ( const comment of structMatch.struct.actions.comments ?? []) {
                 const additionalFilesContext = structMatch.additionalFilePaths.size > 0 ? `\n\n_Also affects files:_\n${Array.from(structMatch.additionalFilePaths).map(f => `- ${f}`).join('\n')}` : '';
                 review_comments.push({
@@ -73,8 +77,7 @@ export class MatchProcessor {
         if (labels.length > 0) {
             await this.addLabels(labels);
         }
-        // TODO: handle labels
-    
+        return Array.from(structs.values()).map(s => s.struct).concat(Array.from(this.previous_matches.values()).map(s => s));
     }
     
     private async postReview(summary: string, comments: ReviewCommentStruct[] ): Promise<void> {

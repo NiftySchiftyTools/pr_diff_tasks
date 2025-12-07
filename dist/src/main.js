@@ -53,6 +53,54 @@ async function run() {
         const github_token = core.getInput("github_token");
         const pr_number = parseInt(core.getInput("pr_number"));
         const octokit = github.getOctokit(github_token);
+        const pr_artifacts = await octokit.rest.actions.listArtifactsForRepo({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            name: `${pr_number}-domain-guards-matches`,
+        });
+        let prev_matches_path = null;
+        if (pr_artifacts.data.artifacts.length > 0) {
+            core.info(`Found artifact for previous matches: ${pr_artifacts.data.artifacts[0].name}`);
+            const artifact_data = await octokit.rest.actions.downloadArtifact({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                artifact_id: pr_artifacts.data.artifacts[0].id,
+                archive_format: "zip",
+            });
+            // Save the zip file
+            const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+            const zipPath = path.join(tmpDir, `${pr_number}-domain-guards-matches.zip`);
+            await fs.writeFile(zipPath, Buffer.from(artifact_data.data));
+            core.info(`Downloaded artifact to: ${zipPath}`);
+            // Extract the zip file
+            const extractPath = path.join(tmpDir, `${pr_number}-domain-guards-matches`);
+            await fs.mkdir(extractPath, { recursive: true });
+            // Use unzip command to extract
+            const { execSync } = require('child_process');
+            execSync(`unzip -o "${zipPath}" -d "${extractPath}"`);
+            // Set the path to the extracted matches.json
+            prev_matches_path = path.join(extractPath, "matches.json");
+            core.info(`Extracted artifact to: ${prev_matches_path}`);
+        }
+        const prev_matched_structs = new Map();
+        if (prev_matches_path) {
+            core.info(`Loading previous matches from: ${prev_matches_path}`);
+            try {
+                const prevMatchesContent = await fs.readFile(prev_matches_path, "utf8");
+                const prevMatchesData = JSON.parse(prevMatchesContent);
+                for (const struct_item of prevMatchesData) {
+                    prev_matched_structs.set(`${struct_item.dir}/${struct_item.name}`, dg_struct_1.DGStruct.fromJSON(struct_item));
+                }
+                core.info(`Loaded ${prev_matched_structs.size} previous matches from ${prev_matches_path}`);
+            }
+            catch (err) {
+                core.warning(`Failed to read previous matches from ${prev_matches_path}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        core.info(`Loaded ${prev_matched_structs.size} previous matched structs.`);
+        for (const [_key, _struct] of prev_matched_structs) {
+            core.info(`Previously matched struct: ${_key}: ${_struct.toSummaryString()}`);
+        }
         const { data: pr } = await octokit.rest.pulls.get({
             owner: github.context.repo.owner,
             repo: github.context.repo.repo,
@@ -83,8 +131,21 @@ async function run() {
         core.info(`Found ${matches.size} files with matching structures.`);
         // Process matches: post comments, request reviewers, etc.
         core.info("Processing matches...");
-        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit);
-        matchProcessor.handleMatches(matches);
+        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit, prev_matched_structs);
+        const matches_to_cache = await matchProcessor.handleMatches(matches);
+        // Write matches to a temporary JSON file
+        const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+        const tmpFilePath = path.join(tmpDir, `matches.json`);
+        const matchesData = matches_to_cache.map((dg_struct) => ({
+            name: dg_struct.name,
+            dir: dg_struct.dir,
+            paths: dg_struct.paths,
+            filters: dg_struct.filters,
+            actions: dg_struct.actions,
+        }));
+        await fs.writeFile(tmpFilePath, JSON.stringify(matchesData, null, 2), "utf8");
+        core.info(`Matches written to: ${tmpFilePath}`);
+        core.setOutput("matches_path", tmpFilePath);
     }
     catch (error) {
         // Fail the workflow run if an error occurs
