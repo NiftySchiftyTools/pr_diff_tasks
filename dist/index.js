@@ -34478,6 +34478,25 @@ class DGStruct {
             dir: this.dir,
         };
     }
+    toSummaryString() {
+        let summary = `${this.dir}/${this.name}:\n`;
+        if (this.actions.assignees) {
+            summary += `  - Assignees: [${this.actions.assignees.join(", ")}]\n`;
+        }
+        if (this.actions.reviewers) {
+            summary += `  - Reviewers: [${this.actions.reviewers.join(", ")}]\n`;
+        }
+        if (this.actions.teams) {
+            summary += `  - Teams: [${this.actions.teams.join(", ")}]\n`;
+        }
+        if (this.actions.labels) {
+            summary += `  - Labels: [${this.actions.labels.join(", ")}]\n`;
+        }
+        if (this.actions.comments) {
+            summary += `  - Comments: [${this.actions.comments.length} comment(s)]\n`;
+        }
+        return summary;
+    }
 }
 exports.DGStruct = DGStruct;
 //# sourceMappingURL=dg-struct.js.map
@@ -34652,61 +34671,195 @@ exports.DiffAnalysis = PRDiff;
 /***/ }),
 
 /***/ 1275:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.handleMatches = handleMatches;
+exports.MatchProcessor = void 0;
 const match_1 = __nccwpck_require__(2251);
-function handleMatches(matches, pr_response, octokit) {
-    const structs = new Map();
-    // Deduplicate Matches using StructMatches
-    for (const [filePath, FileMatches] of matches) {
-        for (const dg_struct of FileMatches.getMatches()) {
-            if (structs.has(`${dg_struct.dir}/${dg_struct.name}`)) {
-                structs.get(`${dg_struct.dir}/${dg_struct.name}`)?.addFilePath(filePath);
-            }
-            else {
-                const structMatch = new match_1.StructMatches(dg_struct, filePath);
-                structs.set(`${dg_struct.dir}/${dg_struct.name}`, structMatch);
+const core = __importStar(__nccwpck_require__(6966));
+class MatchProcessor {
+    constructor(pr_response, octokit) {
+        this.pull_request = pr_response;
+        this.octokit = octokit;
+    }
+    async handleMatches(matches) {
+        const structs = new Map();
+        // Deduplicate Matches using StructMatches
+        for (const [filePath, FileMatches] of matches) {
+            for (const dg_struct of FileMatches.getMatches()) {
+                if (structs.has(`${dg_struct.dir}/${dg_struct.name}`)) {
+                    structs.get(`${dg_struct.dir}/${dg_struct.name}`)?.addFilePath(filePath);
+                }
+                else {
+                    const structMatch = new match_1.StructMatches(dg_struct, filePath);
+                    structs.set(`${dg_struct.dir}/${dg_struct.name}`, structMatch);
+                }
             }
         }
+        // Prepare review comments and summary
+        const review_comments = [];
+        let summary = "Triggered Domain Guard Structures:";
+        for (const [_, structMatch] of structs) {
+            for (const comment of structMatch.struct.actions.comments ?? []) {
+                const additionalFilesContext = structMatch.additionalFilePaths.size > 0 ? `\n\n_Also affects files:_\n${Array.from(structMatch.additionalFilePaths).map(f => `- ${f}`).join('\n')}` : '';
+                review_comments.push({
+                    path: structMatch.anchorFilePath,
+                    body: `${comment}${additionalFilesContext}`,
+                    position: 1, // Docs show this as optional, but it fails without it. TODO: figure out how to make it a file level comment
+                });
+            }
+            summary += `\n${structMatch.struct.toSummaryString()}`;
+        }
+        if (review_comments.length > 0) {
+            await this.postReview(summary, review_comments);
+        }
+        // Request Reviewers and Teams
+        const teams_to_request = Array.from(structs.values()).flatMap(s => s.struct.actions.teams ?? []);
+        const users_to_request = Array.from(structs.values()).flatMap(s => s.struct.actions.reviewers ?? []);
+        if (users_to_request.length > 0 || teams_to_request.length > 0) {
+            await this.requestReviewers(users_to_request, teams_to_request);
+        }
+        // Assign Users
+        const assignees = Array.from(structs.values()).flatMap(s => s.struct.actions.assignees ?? []);
+        if (assignees.length > 0) {
+            await this.assignUsers(assignees);
+        }
+        // Add Labels
+        const labels = Array.from(structs.values()).flatMap(s => s.struct.actions.labels ?? []);
+        if (labels.length > 0) {
+            await this.addLabels(labels);
+        }
+        // TODO: handle labels
     }
-    // Prepare review comments and summary
-    const review_comments = [];
-    let summary = `Domain Guard Comments triggered`;
-    for (const [_, structMatch] of structs) {
-        for (const comment of structMatch.struct.actions.comments ?? []) {
-            const additionalFilesContext = structMatch.additionalFilePaths.size > 0 ? `\n\n_Also affects files:_\n${Array.from(structMatch.additionalFilePaths).map(f => `- ${f}`).join('\n')}` : '';
-            review_comments.push({
-                path: structMatch.anchorFilePath,
-                body: `${comment}${additionalFilesContext}`,
-                position: null,
+    async postReview(summary, comments) {
+        await this.octokit.rest.pulls.createReview({
+            owner: this.pull_request.base.repo.owner.login,
+            repo: this.pull_request.base.repo.name,
+            pull_number: this.pull_request.number,
+            body: summary,
+            event: "COMMENT",
+            comments: comments
+        });
+    }
+    async fetchCollaborators() {
+        const collaborators = await this.octokit.paginate(this.octokit.rest.repos.listCollaborators, {
+            owner: this.pull_request.base.repo.owner.login,
+            repo: this.pull_request.base.repo.name,
+            per_page: 100,
+        });
+        this.collaborators = collaborators.map(c => c.login);
+        core.debug(`Collaborators: [${this.collaborators.join(", ")}]`);
+    }
+    async requestReviewers(reviewers, teams) {
+        if (!this.collaborators) {
+            await this.fetchCollaborators();
+        }
+        const valid_users_to_request = reviewers.filter(u => this.collaborators.some(c => c === u));
+        const invalid_users = reviewers.filter(u => !this.collaborators.some(c => c === u));
+        if (invalid_users.length > 0) {
+            core.warning(`The following users could not be requested as reviewers because they are not collaborators on the repository ${this.pull_request.base.repo.name}: [${invalid_users.join(", ")}]`);
+        }
+        if (valid_users_to_request.length > 0) {
+            await this.octokit.rest.pulls.requestReviewers({
+                owner: this.pull_request.base.repo.owner.login,
+                repo: this.pull_request.base.repo.name,
+                pull_number: this.pull_request.number,
+                reviewers: valid_users_to_request,
+            });
+        }
+        if (this.pull_request.base.repo.organization) {
+            const repo_teams = await this.octokit.paginate(this.octokit.rest.teams.list, {
+                org: this.pull_request.base.repo.organization,
+                per_page: 100,
+            });
+        }
+        else if (teams.length > 0) {
+            core.warning(`Repository ${this.pull_request.base.repo.name} is not part of an organization; skipping team reviewer requests. As Teams are an organization-level feature.`);
+            core.warning(`Teams [${teams.join(", ")}] could not be requested as reviewers.`);
+        }
+    }
+    async assignUsers(assignees) {
+        if (!this.collaborators) {
+            await this.fetchCollaborators();
+        }
+        const assigning_users = [];
+        for (const user of assignees) {
+            if (!this.collaborators.includes(user)) {
+                core.warning(`User ${user} could not be assigned because they are not a collaborator on the repository ${this.pull_request.base.repo.name}.`);
+            }
+            else {
+                assigning_users.push(user);
+            }
+        }
+        this.octokit.rest.issues.addAssignees({
+            owner: this.pull_request.base.repo.owner.login,
+            repo: this.pull_request.base.repo.name,
+            issue_number: this.pull_request.number,
+            assignees: assigning_users.slice(0, 10), // GitHub API limit is 10 assignees per issue
+        });
+        if (assigning_users.length > 10) {
+            core.warning(`Could not assign [${assigning_users.slice(10).join(", ")}] because GitHub API limits assignees to 10`);
+        }
+    }
+    async addLabels(labels) {
+        const valid_labels_response = await this.octokit.paginate(this.octokit.rest.issues.listLabelsForRepo, {
+            owner: this.pull_request.base.repo.owner.login,
+            repo: this.pull_request.base.repo.name,
+            per_page: 100,
+        });
+        core.debug(`Valid labels in repo: [${valid_labels_response.map(l => l.name).join(", ")}]`);
+        const valid_labels = valid_labels_response.map(l => l.name);
+        const labels_to_add = labels.filter(l => valid_labels.includes(l));
+        const invalid_labels = labels.filter(l => !valid_labels.includes(l));
+        if (invalid_labels.length > 0) {
+            core.warning(`The following labels could not be added because they do not exist in the repository ${this.pull_request.base.repo.name}: [${invalid_labels.join(", ")}]`);
+        }
+        else if (labels_to_add.length > 0) {
+            await this.octokit.rest.issues.addLabels({
+                owner: this.pull_request.base.repo.owner.login,
+                repo: this.pull_request.base.repo.name,
+                issue_number: this.pull_request.number,
+                labels: labels_to_add,
             });
         }
     }
-    if (review_comments.length > 0) {
-        summary += `: ${review_comments.length} comment(s) added.`;
-        postReview(summary, octokit, pr_response, review_comments);
-    }
-    // Request Reviewers and Teams
-    // TODO: handle reviewers to be requested
-    // Assign Users
-    // TODO: handle assignees
-    // Add Labels
-    // TODO: handle labels
 }
-function postReview(summary, octokit, pr_response, comments) {
-    octokit.rest.pulls.createReview({
-        owner: pr_response.base.repo.owner.login,
-        repo: pr_response.base.repo.name,
-        pull_number: pr_response.number,
-        body: summary,
-        event: "COMMENT",
-        comments: comments
-    });
-}
+exports.MatchProcessor = MatchProcessor;
 //# sourceMappingURL=helpers.js.map
 
 /***/ }),
@@ -34788,19 +34941,20 @@ async function run() {
         // Cast it to string since the API returns raw text
         const diffText = typeof raw_diff === "string" ? raw_diff : JSON.stringify(raw_diff);
         // Parse the diff into a PRDiff object
+        core.info("Analysing PR Diff...");
         const prDiff = new diff_analysis_1.PRDiff(diffText);
-        core.info("PR Diff Analysis:");
-        core.info(JSON.stringify(prDiff.getSummary(), null, 2));
+        core.info(`PR Diff contains changes to ${prDiff.fileDiffs.size} files.`);
         // Parse all .dg files from the repo
+        core.info("Parsing Domain Guard Configs...");
         const configs = await getDomainGuardStructs(github.context.payload.repository?.clone_url ? "." : process.cwd());
-        core.info("Parsed Domain Guard Configs:");
-        core.info(JSON.stringify(configs, null, 2));
         // Collect matching structures for the PR diff
-        core.info("Starting to collect matching structures...");
+        core.info("Collecting matching structures...");
         const matches = collectMatchingStructures(configs, prDiff);
-        core.info("Domain Guard Matches:");
-        (0, helpers_1.handleMatches)(matches, pr, octokit);
-        core.info(JSON.stringify(Array.from(matches.entries()), null, 2));
+        core.info(`Found ${matches.size} files with matching structures.`);
+        // Process matches: post comments, request reviewers, etc.
+        core.info("Processing matches...");
+        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit);
+        matchProcessor.handleMatches(matches);
     }
     catch (error) {
         // Fail the workflow run if an error occurs

@@ -52,5 +52,6 @@ export declare class DGStruct {
         actions: DGActions;
         dir: string;
     };
+    toSummaryString(): string;
 }
 //# sourceMappingURL=dg-struct.d.ts.map

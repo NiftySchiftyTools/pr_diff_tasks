@@ -71,19 +71,20 @@ async function run() {
         // Cast it to string since the API returns raw text
         const diffText = typeof raw_diff === "string" ? raw_diff : JSON.stringify(raw_diff);
         // Parse the diff into a PRDiff object
+        core.info("Analysing PR Diff...");
         const prDiff = new diff_analysis_1.PRDiff(diffText);
-        core.info("PR Diff Analysis:");
-        core.info(JSON.stringify(prDiff.getSummary(), null, 2));
+        core.info(`PR Diff contains changes to ${prDiff.fileDiffs.size} files.`);
         // Parse all .dg files from the repo
+        core.info("Parsing Domain Guard Configs...");
         const configs = await getDomainGuardStructs(github.context.payload.repository?.clone_url ? "." : process.cwd());
-        core.info("Parsed Domain Guard Configs:");
-        core.info(JSON.stringify(configs, null, 2));
         // Collect matching structures for the PR diff
-        core.info("Starting to collect matching structures...");
+        core.info("Collecting matching structures...");
         const matches = collectMatchingStructures(configs, prDiff);
-        core.info("Domain Guard Matches:");
-        (0, helpers_1.handleMatches)(matches, pr, octokit);
-        core.info(JSON.stringify(Array.from(matches.entries()), null, 2));
+        core.info(`Found ${matches.size} files with matching structures.`);
+        // Process matches: post comments, request reviewers, etc.
+        core.info("Processing matches...");
+        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit);
+        matchProcessor.handleMatches(matches);
     }
     catch (error) {
         // Fail the workflow run if an error occurs

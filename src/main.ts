@@ -6,7 +6,7 @@ import * as yaml from "js-yaml";
 import { PRDiff } from "./diff-analysis";
 import { DGStruct } from "./dg-struct";
 import { FileMatches } from "./match";
-import { handleMatches } from "./helpers";
+import { MatchProcessor } from "./helpers";
 import { PullRequest } from "@octokit/webhooks-types";
 
 /**
@@ -40,23 +40,24 @@ export async function run(): Promise<void> {
       typeof raw_diff === "string" ? raw_diff : JSON.stringify(raw_diff);
 
     // Parse the diff into a PRDiff object
+    core.info("Analysing PR Diff...");
     const prDiff = new PRDiff(diffText);
-    core.info("PR Diff Analysis:");
-    core.info(JSON.stringify(prDiff.getSummary(), null, 2));
+    core.info(`PR Diff contains changes to ${prDiff.fileDiffs.size} files.`);
 
     // Parse all .dg files from the repo
+    core.info("Parsing Domain Guard Configs...");
     const configs = await getDomainGuardStructs(
       github.context.payload.repository?.clone_url ? "." : process.cwd(),
     );
-    core.info("Parsed Domain Guard Configs:");
-    core.info(JSON.stringify(configs, null, 2));
 
     // Collect matching structures for the PR diff
-    core.info("Starting to collect matching structures...");
+    core.info("Collecting matching structures...");
     const matches = collectMatchingStructures(configs, prDiff);
-    core.info("Domain Guard Matches:");
-    handleMatches(matches, pr as PullRequest, octokit);
-    core.info(JSON.stringify(Array.from(matches.entries()), null, 2));
+    core.info(`Found ${matches.size} files with matching structures.`);
+    // Process matches: post comments, request reviewers, etc.
+    core.info("Processing matches...")
+    const matchProcessor = new MatchProcessor(pr as PullRequest, octokit);
+    matchProcessor.handleMatches(matches);
 
   } catch (error) {
     // Fail the workflow run if an error occurs

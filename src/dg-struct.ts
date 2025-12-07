@@ -185,4 +185,24 @@ export class DGStruct {
       dir: this.dir,
     };
   }
+
+  toSummaryString(): string {
+    let summary = `${this.dir}/${this.name}:\n`;
+    if (this.actions.assignees){
+      summary += `  - Assignees: [${this.actions.assignees.join(", ")}]\n`;
+    }
+    if (this.actions.reviewers){
+      summary += `  - Reviewers: [${this.actions.reviewers.join(", ")}]\n`;
+    }
+    if (this.actions.teams){
+      summary += `  - Teams: [${this.actions.teams.join(", ")}]\n`;
+    }
+    if (this.actions.labels){
+      summary += `  - Labels: [${this.actions.labels.join(", ")}]\n`;
+    }
+    if (this.actions.comments){
+      summary += `  - Comments: [${this.actions.comments.length} comment(s)]\n`;
+    }
+    return summary;
+  }
 }
