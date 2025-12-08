@@ -15,17 +15,28 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DGStruct = void 0;
 const path = __importStar(require("path"));
 const core = __importStar(require("@actions/core"));
+const minimatch_1 = require("minimatch");
 class DGStruct {
     constructor(name, obj, dir) {
         this.name = name;
@@ -74,15 +85,22 @@ class DGStruct {
         }
         return results;
     }
-    // Helper: convert relative patterns to a regex (very small subset: supports * wildcard)
-    patternToRegex(pat) {
-        // make path posix-style for matching
-        const rel = pat.replace(/\\/g, "/");
-        // escape regex special chars, then replace '*' with '.*'
-        const esc = rel
-            .replace(/[-/\\^$+?.()|[\]{}]/g, "\\$&")
-            .replace(/\\\*/g, ".*");
-        return new RegExp("^" + esc + "$");
+    /**
+     * Reconstruct a DGStruct from a JSON object (e.g., from toJSON())
+     */
+    static fromJSON(json) {
+        if (!json || typeof json !== "object") {
+            throw new Error("Invalid JSON for DGStruct");
+        }
+        // Create a new instance using the constructor
+        const obj = {
+            dir: json.dir,
+            name: json.name,
+            paths: json.paths,
+            filters: json.filters,
+            actions: json.actions
+        };
+        return new DGStruct(json.name, obj, json.dir);
     }
     normalizeRelative(target) {
         // produce a path relative to the DG file dir and in posix style
@@ -95,17 +113,15 @@ class DGStruct {
      */
     matchesFile(fileFullPath) {
         if (!this.paths || this.paths.length === 0)
-            return false;
+            return true; // no paths means match all
         const rel = this.normalizeRelative(fileFullPath);
         // check exclude_paths first
         for (const ex of this.filters.exclude_paths ?? []) {
-            const rex = this.patternToRegex(ex);
-            if (rex.test(rel))
+            if ((0, minimatch_1.minimatch)(rel, ex))
                 return false;
         }
         for (const pat of this.paths) {
-            const r = this.patternToRegex(pat);
-            if (r.test(rel))
+            if ((0, minimatch_1.minimatch)(rel, pat))
                 return true;
         }
         return false;
@@ -139,6 +155,39 @@ class DGStruct {
         }
         return regex.test(subject);
     }
+    /**
+     * Check whether a FileDiff matches this struct's filters.
+     * This combines both file path matching and diff content matching.
+     *
+     * @param fileDiff - The FileDiff to check against this struct's filters
+     * @returns true if the FileDiff matches all filters (path + diff content)
+     */
+    matchesFileDiff(fileDiff) {
+        // First check if the file path matches
+        if (!this.matchesFile(fileDiff.filePath)) {
+            return false;
+        }
+        // Then check if the diff content matches based on diff_type
+        const regex = new RegExp(this.filters.contains ?? ".*", "s");
+        let subject = "";
+        switch (this.filters.diff_type) {
+            case "additions":
+                subject = fileDiff.addedLines.join("\n");
+                break;
+            case "removals":
+                subject = fileDiff.deletedLines.join("\n");
+                break;
+            case "all":
+                subject = fileDiff.changedLines.join("\n");
+                break;
+            case "raw":
+                subject = fileDiff.rawDiff;
+                break;
+            default:
+                subject = fileDiff.changedLines.join("\n");
+        }
+        return regex.test(subject);
+    }
     toJSON() {
         return {
             name: this.name,
@@ -147,6 +196,25 @@ class DGStruct {
             actions: this.actions,
             dir: this.dir,
         };
+    }
+    toSummaryString() {
+        let summary = `${this.dir}/${this.name}:\n`;
+        if (this.actions.assignees && this.actions.assignees.length > 0) {
+            summary += `  - Assignees: [${this.actions.assignees.join(", ")}]\n`;
+        }
+        if (this.actions.reviewers && this.actions.reviewers.length > 0) {
+            summary += `  - Reviewers: [${this.actions.reviewers.join(", ")}]\n`;
+        }
+        if (this.actions.teams && this.actions.teams.length > 0) {
+            summary += `  - Teams: [${this.actions.teams.join(", ")}]\n`;
+        }
+        if (this.actions.labels && this.actions.labels.length > 0) {
+            summary += `  - Labels: [${this.actions.labels.join(", ")}]\n`;
+        }
+        if (this.actions.comments && this.actions.comments.length > 0) {
+            summary += `  - Comments: [${this.actions.comments.length} comment(s)]\n`;
+        }
+        return summary;
     }
 }
 exports.DGStruct = DGStruct;

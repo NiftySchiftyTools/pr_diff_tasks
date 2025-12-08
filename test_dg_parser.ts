@@ -1,4 +1,4 @@
-import { getDomainGuardConfigs } from "./src/main";
+import { getDomainGuardStructs } from "./src/main";
 import * as path from "path";
 
 async function test() {
@@ -6,7 +6,7 @@ async function test() {
   console.log(`Parsing .dg files from: ${examplesDir}\n`);
 
   try {
-    const configs = await getDomainGuardConfigs(examplesDir);
+    const configs = await getDomainGuardStructs(examplesDir);
     console.log("Parsed Domain Guard Configs:");
     console.log(JSON.stringify(configs, null, 2));
   } catch (err) {

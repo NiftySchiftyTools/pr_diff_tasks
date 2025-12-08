@@ -13,6 +13,7 @@ A structure has the following options, anything extra will be ignored but must b
 ```yaml
 STRUCT_NAME_CAN_BE_ANYTHING:
   # List of filepath wildcards that trigger the actions in the struct
+  # If not provided this matches all changes in the current directory and below
   paths: []
   # Filters for the structures triggers
   filters:
@@ -43,6 +44,16 @@ STRUCT_NAME_CAN_BE_ANYTHING:
     teams: []
     # List of labels to attach to the PR
     labels: []
+```
+
+be sure to add the following to your `.vscode/settings.json` to use your yaml extension for \*.dg files:
+
+```json
+{
+  "files.associations": {
+    "*.dg": "yaml"
+  }
+}
 ```
 
 You can have as many as you'd like in each file, and as many .dg files as you'd like throughout the repo. Directory placement is important to consider when defining a struct. the `paths` and `exclude_paths` values are relative to the current directory of the file. Also when using `last_match` it will determine under what conditions the match is iagnored.

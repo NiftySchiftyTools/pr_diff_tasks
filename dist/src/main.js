@@ -15,22 +15,35 @@ var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (
 }) : function(o, v) {
     o["default"] = v;
 });
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.run = run;
-exports.getDomainGuardConfigs = getDomainGuardConfigs;
+exports.getDomainGuardStructs = getDomainGuardStructs;
 const core = __importStar(require("@actions/core"));
 const github = __importStar(require("@actions/github"));
 const fs = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
 const yaml = __importStar(require("js-yaml"));
 const diff_analysis_1 = require("./diff-analysis");
+const dg_struct_1 = require("./dg-struct");
+const match_1 = require("./match");
+const helpers_1 = require("./helpers");
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -40,6 +53,54 @@ async function run() {
         const github_token = core.getInput("github_token");
         const pr_number = parseInt(core.getInput("pr_number"));
         const octokit = github.getOctokit(github_token);
+        const pr_artifacts = await octokit.rest.actions.listArtifactsForRepo({
+            owner: github.context.repo.owner,
+            repo: github.context.repo.repo,
+            name: `${pr_number}-domain-guards-matches`,
+        });
+        let prev_matches_path = null;
+        if (pr_artifacts.data.artifacts.length > 0) {
+            core.info(`Found artifact for previous matches: ${pr_artifacts.data.artifacts[0].name}`);
+            const artifact_data = await octokit.rest.actions.downloadArtifact({
+                owner: github.context.repo.owner,
+                repo: github.context.repo.repo,
+                artifact_id: pr_artifacts.data.artifacts[0].id,
+                archive_format: "zip",
+            });
+            // Save the zip file
+            const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+            const zipPath = path.join(tmpDir, `${pr_number}-domain-guards-matches.zip`);
+            await fs.writeFile(zipPath, Buffer.from(artifact_data.data));
+            core.info(`Downloaded artifact to: ${zipPath}`);
+            // Extract the zip file
+            const extractPath = path.join(tmpDir, `${pr_number}-domain-guards-matches`);
+            await fs.mkdir(extractPath, { recursive: true });
+            // Use unzip command to extract
+            const { execSync } = require('child_process');
+            execSync(`unzip -o "${zipPath}" -d "${extractPath}"`);
+            // Set the path to the extracted matches.json
+            prev_matches_path = path.join(extractPath, "matches.json");
+            core.info(`Extracted artifact to: ${prev_matches_path}`);
+        }
+        const prev_matched_structs = new Map();
+        if (prev_matches_path) {
+            core.info(`Loading previous matches from: ${prev_matches_path}`);
+            try {
+                const prevMatchesContent = await fs.readFile(prev_matches_path, "utf8");
+                const prevMatchesData = JSON.parse(prevMatchesContent);
+                for (const struct_item of prevMatchesData) {
+                    prev_matched_structs.set(`${struct_item.dir}/${struct_item.name}`, dg_struct_1.DGStruct.fromJSON(struct_item));
+                }
+                core.info(`Loaded ${prev_matched_structs.size} previous matches from ${prev_matches_path}`);
+            }
+            catch (err) {
+                core.warning(`Failed to read previous matches from ${prev_matches_path}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        core.info(`Loaded ${prev_matched_structs.size} previous matched structs.`);
+        for (const [_key, _struct] of prev_matched_structs) {
+            core.info(`Previously matched struct: ${_key}: ${_struct.toSummaryString()}`);
+        }
         const { data: pr } = await octokit.rest.pulls.get({
             owner: github.context.repo.owner,
             repo: github.context.repo.repo,
@@ -57,32 +118,83 @@ async function run() {
         // The raw_diff when using mediaType.format: 'diff' returns the diff as a string
         // Cast it to string since the API returns raw text
         const diffText = typeof raw_diff === "string" ? raw_diff : JSON.stringify(raw_diff);
-        // Parse the diff into a DiffAnalysis object
-        const diffAnalysis = new diff_analysis_1.DiffAnalysis(diffText);
-        core.info("Diff Analysis:");
-        core.info(JSON.stringify(diffAnalysis.getSummary(), null, 2));
+        // Parse the diff into a PRDiff object
+        core.info("Analysing PR Diff...");
+        const prDiff = new diff_analysis_1.PRDiff(diffText);
+        core.info(`PR Diff contains changes to ${prDiff.fileDiffs.size} files.`);
         // Parse all .dg files from the repo
-        const configs = await getDomainGuardConfigs(github.context.payload.repository?.clone_url ? "." : process.cwd());
-        core.info("Parsed Domain Guard Configs:");
-        core.info(JSON.stringify(configs, null, 2));
-        doTheThing();
+        core.info("Parsing Domain Guard Configs...");
+        const configs = await getDomainGuardStructs(github.context.payload.repository?.clone_url ? "." : process.cwd());
+        // Collect matching structures for the PR diff
+        core.info("Collecting matching structures...");
+        const matches = collectMatchingStructures(configs, prDiff);
+        core.info(`Found ${matches.size} files with matching structures.`);
+        // Process matches: post comments, request reviewers, etc.
+        core.info("Processing matches...");
+        const matchProcessor = new helpers_1.MatchProcessor(pr, octokit, prev_matched_structs);
+        const matches_to_cache = await matchProcessor.handleMatches(matches);
+        // Write matches to a temporary JSON file
+        const tmpDir = process.env.RUNNER_TEMP || "/tmp";
+        const tmpFilePath = path.join(tmpDir, `matches.json`);
+        const matchesData = matches_to_cache.map((dg_struct) => ({
+            name: dg_struct.name,
+            dir: dg_struct.dir,
+            paths: dg_struct.paths,
+            filters: dg_struct.filters,
+            actions: dg_struct.actions,
+        }));
+        await fs.writeFile(tmpFilePath, JSON.stringify(matchesData, null, 2), "utf8");
+        core.info(`Matches written to: ${tmpFilePath}`);
+        core.setOutput("matches_path", tmpFilePath);
     }
     catch (error) {
         // Fail the workflow run if an error occurs
-        if (error instanceof Error)
+        if (error instanceof Error) {
+            core.error(`Error: ${error.message}`);
+            core.error(`Stack: ${error.stack}`);
             core.setFailed(error.message);
+        }
+        else {
+            core.setFailed(String(error));
+        }
     }
 }
-function doTheThing() { }
+function collectMatchingStructures(all_structs, prDiff) {
+    const matches = new Map();
+    for (const [filePath, fileDiff] of prDiff.fileDiffs) {
+        const matchesForFile = new match_1.FileMatches(filePath);
+        for (const [configPath, structs] of all_structs) {
+            if (filePath.startsWith(configPath) || configPath === ".") {
+                for (const [_, struct] of structs) {
+                    if (struct.matchesFileDiff(fileDiff)) {
+                        switch (struct.filters.quirk) {
+                            case "all":
+                                matchesForFile.addDirectMatch(struct);
+                                break;
+                            case "last_match":
+                                matchesForFile.updateLastMatch(struct, configPath.split(path.sep).length);
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+        // Only add to matches if there are any matches for this file
+        if (matchesForFile.hasMatches()) {
+            matches.set(filePath, matchesForFile);
+        }
+    }
+    return matches;
+}
 /**
  * Search the repository for all `.dg` files, parse them as YAML, and return
  * a mapping keyed by the parent folder filepath (relative to rootDir).
  *
  * - rootDir: the directory to start searching from (defaults to process.cwd())
- * - Returns: Record<parentFolderRelativePath, mergedYamlObject>
+ * - Returns: Record<parentFolderRelativePath, Record<structName, DGStruct>>
  */
-async function getDomainGuardConfigs(rootDir = process.cwd()) {
-    const results = {};
+async function getDomainGuardStructs(rootDir = process.cwd()) {
+    const results = new Map();
     async function walk(dir) {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -102,9 +214,16 @@ async function getDomainGuardConfigs(rootDir = process.cwd()) {
                     const merged = Object.assign({}, ...docs);
                     const parent = path.dirname(full);
                     const key = path.relative(rootDir, parent) || ".";
-                    if (!results[key])
-                        results[key] = {};
-                    Object.assign(results[key], merged);
+                    // Parse the merged YAML into DGStruct instances
+                    const structs = dg_struct_1.DGStruct.fromParsedYaml(merged, parent);
+                    if (!results.has(key)) {
+                        results.set(key, new Map());
+                    }
+                    // Store each struct by its name
+                    const structsMap = results.get(key);
+                    for (const struct of structs) {
+                        structsMap.set(struct.name, struct);
+                    }
                 }
                 catch (err) {
                     // Don't throw; log a warning and continue

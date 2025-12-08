@@ -1,3 +1,4 @@
+import { FileDiff } from "./diff-analysis";
 export type Quirk = "all" | "last_match";
 export type DiffType = "all" | "additions" | "removals" | "raw";
 export interface DGFilters {
@@ -26,7 +27,10 @@ export declare class DGStruct {
      * the .dg file so relative paths can be evaluated later.
      */
     static fromParsedYaml(parsed: any, fileDir: string): DGStruct[];
-    private patternToRegex;
+    /**
+     * Reconstruct a DGStruct from a JSON object (e.g., from toJSON())
+     */
+    static fromJSON(json: any): DGStruct;
     private normalizeRelative;
     /**
      * Check whether this struct's path globs match the given file path.
@@ -37,6 +41,14 @@ export declare class DGStruct {
      * Check whether the diff text matches the `contains` regex based on diff_type.
      */
     matchesDiff(diffText: string): boolean;
+    /**
+     * Check whether a FileDiff matches this struct's filters.
+     * This combines both file path matching and diff content matching.
+     *
+     * @param fileDiff - The FileDiff to check against this struct's filters
+     * @returns true if the FileDiff matches all filters (path + diff content)
+     */
+    matchesFileDiff(fileDiff: FileDiff): boolean;
     toJSON(): {
         name: string;
         paths: string[];
@@ -44,5 +56,6 @@ export declare class DGStruct {
         actions: DGActions;
         dir: string;
     };
+    toSummaryString(): string;
 }
 //# sourceMappingURL=dg-struct.d.ts.map

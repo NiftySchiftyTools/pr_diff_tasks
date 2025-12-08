@@ -1,0 +1,22 @@
+name: Domain Guard Example and Test Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+  pull-requests: write
+
+jobs:
+  domain_guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run Domain Guards Action
+        uses: dtschiffman/domain_guards@master
+        with:
+          github_token: ${{ github.token }}
+          pr_number: ${{ github.event.pull_request.number }}
