@@ -1,10 +1,12 @@
-### Domain Guards
+### Pull Request Diff Tasks
 
-Domain Guards is a github action that will read various yaml files throughout the repo and perform various actions, on Pull Requests based on the diff of the PR. The various actions include:
+Pull Request Diff Tasks is a github action that will read various yaml files throughout the repo and perform various actions, on Pull Requests based on the diff of the PR. This is accomplished by defining "domain guard" or (\*.dg) files across the repo that the action can read and perform small tasks on the PR that triggers the configured guards. The various actions include:
 
 - Requesting reviews from Repo Collaborators and Teams
 - Adding collaborators as Assignees
 - Add an automated comment to a file in the Pull Request
+- Assigning a User to the PR
+- Attaching a label to the PR
 
 This is accomplished by the structures in files with the .dg extension.
 
@@ -18,13 +20,13 @@ STRUCT_NAME_CAN_BE_ANYTHING:
   # Filters for the structures triggers
   filters:
     # Regular Expression to match to the PR diff
-    contains: ".*"
+    diff_regex: ".*"
     # Matching Behaviour of the struct
     #  - all: always matches (DEFAULT if left empty or with unsupported value)
     #  - last_match: Will only match if this structure is the deepest structure
     #                to match the file in question.
     quirk: all
-    # Part of the diff to attempt to match with the 'contains' filter's regex
+    # Part of the diff to attempt to match with the 'diff_regex' filter's regex
     #  - all: all lines with a diff (DEFAULT if left empty or with unsupported value)
     #  - additions: only file additions
     #  - removals: only file removals
@@ -87,3 +89,38 @@ and The PR diff was in file at `subdirectory/file1.txt`, then only the `bottom_l
 Action values that are not valid such as a invalid team name, label, github user that is not a collaborator on the repo, etc. Will result in a warning log but will not stop the action.
 
 Another unique behaviour will come up as a result of a technical limitation in Github. Only 10 people can be assigned to a PR. So this will always behave similiar to the `last_match` quirk value, in that it will only ever assign up to the last 10 people marked for assignment.
+
+#### Using the Action
+
+Currently there isn't much to set on the workflow level since the majority of the functionality is controlled via the dg files throughout the repo. However I am open to suggestions for global config options that could be controlled here. Here is the basic structure you will need though:
+
+```yaml
+name: PR Diff Tasks Example and Test Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+  pull-requests: write
+
+jobs:
+  pr_diff_tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run PR Diff Tasks Action
+        uses: NiftySchiftyTools/pr_diff_tasks@main
+        with:
+          github_token: ${{ github.token }}
+          pr_number: ${{ github.event.pull_request.number }}
+```
+
+You will run into some errors if the token doesn't have the right permissions set. Inputs include:
+
+```yaml
+github_token: REQUIRED. token for the action to give permission to the action to perform its tasks on the PRs
+pr_number: REQUIRED. PR to check in the workflow
+```

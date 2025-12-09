@@ -1,4 +1,4 @@
-name: Domain Guards
+name: PR Diff Tasks
 description: A GitHub Action to protect your repository by trigger actions based on domain structures throughout the repo
 author: "Dallin Schiffman"
 
@@ -28,8 +28,8 @@ runs:
           **/*.dg
         sparse-checkout-cone-mode: false
 
-    - name: Run Domain Guards
-      id: run-domain-guards
+    - name: Run PR Diff Tasks
+      id: run-pr-diff-tasks
       shell: bash
       env:
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
@@ -40,5 +40,5 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.pr_number }}-domain-guards-matches
-        path: ${{ steps.run-domain-guards.outputs.matches_path }}
+        path: ${{ steps.run-pr-diff-tasks.outputs.matches_path }}
         overwrite: true

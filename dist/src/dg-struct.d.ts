@@ -2,7 +2,7 @@ import { FileDiff } from "./diff-analysis";
 export type Quirk = "all" | "last_match";
 export type DiffType = "all" | "additions" | "removals" | "raw";
 export interface DGFilters {
-    contains?: string;
+    diff_regex?: string;
     quirk?: Quirk;
     diff_type?: DiffType;
     exclude_paths?: string[];
@@ -38,7 +38,7 @@ export declare class DGStruct {
      */
     matchesFile(fileFullPath: string): boolean;
     /**
-     * Check whether the diff text matches the `contains` regex based on diff_type.
+     * Check whether the diff text matches the `diff_regex` regex based on diff_type.
      */
     matchesDiff(diffText: string): boolean;
     /**

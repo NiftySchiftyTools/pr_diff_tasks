@@ -1,4 +1,4 @@
-name: Domain Guard Example and Test Workflow
+name: PR Diff Tasks Example and Test Workflow
 
 on:
   pull_request:
@@ -11,12 +11,11 @@ permissions:
   pull-requests: write
 
 jobs:
-  domain_guard:
+  pr_diff_tasks:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Run Domain Guards Action
-        uses: dtschiffman/domain_guards@master
+      - name: Run PR Diff Tasks Action
+        uses: NiftySchiftyTools/pr_diff_tasks@main
         with:
           github_token: ${{ github.token }}
           pr_number: ${{ github.event.pull_request.number }}

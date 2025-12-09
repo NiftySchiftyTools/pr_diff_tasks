@@ -58,7 +58,7 @@ export class MatchProcessor {
             }
             summary += `\n${structMatch.struct.toSummaryString()}`
         }
-        if (review_comments.length > 0) {
+        if (structs.size > 0) {
             await this.postReview(summary, review_comments);
         }
         // Request Reviewers and Teams
