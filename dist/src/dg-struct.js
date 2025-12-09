@@ -46,7 +46,7 @@ class DGStruct {
         // filters with defaults
         const f = obj?.filters ?? {};
         this.filters = {
-            contains: typeof f.contains === "string" ? f.contains : ".*",
+            diff_regex: typeof f.diff_regex === "string" ? f.diff_regex : ".*",
             quirk: f.quirk === "last_match" ? "last_match" : "all",
             diff_type: ["all", "additions", "removals", "raw"].includes(f.diff_type)
                 ? f.diff_type
@@ -127,12 +127,12 @@ class DGStruct {
         return false;
     }
     /**
-     * Check whether the diff text matches the `contains` regex based on diff_type.
+     * Check whether the diff text matches the `diff_regex` regex based on diff_type.
      */
     matchesDiff(diffText) {
         if (!diffText)
             return false;
-        const regex = new RegExp(this.filters.contains ?? ".*", "s");
+        const regex = new RegExp(this.filters.diff_regex ?? ".*", "s");
         let subject = diffText;
         switch (this.filters.diff_type) {
             case "additions":
@@ -168,7 +168,7 @@ class DGStruct {
             return false;
         }
         // Then check if the diff content matches based on diff_type
-        const regex = new RegExp(this.filters.contains ?? ".*", "s");
+        const regex = new RegExp(this.filters.diff_regex ?? ".*", "s");
         let subject = "";
         switch (this.filters.diff_type) {
             case "additions":
