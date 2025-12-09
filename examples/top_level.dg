@@ -2,7 +2,7 @@ top_level_struct:
   paths: ["sub1/*.txt", "sub2/*.txt"]
   filters:
     quirk: last_match
-    diff_regex: ".*"
+    diff_regex: "birds"
   actions:
     comments: ["Hello from the top level"]
     reviewers: ["top-reviewer"]
