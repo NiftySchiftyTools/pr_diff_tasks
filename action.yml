@@ -1,8 +1,10 @@
 name: PR Diff Tasks
 description: A GitHub Action to protect your repository by trigger actions based on domain structures throughout the repo
 author: "Dallin Schiffman"
-icon: check-square
-color: purple
+
+branding:
+  icon: check-square
+  color: purple
 
 permissions:
   contents: read
